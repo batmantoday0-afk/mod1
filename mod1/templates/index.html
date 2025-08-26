@@ -1,179 +1,120 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Pokedex — Explore Pokémon</title>
+from flask import Flask, request, jsonify, render_template
+import os
+import json
+from mod1.mod1_modules import pokemon as pkm
 
-  <!-- Stylesheet -->
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/site.css') }}">
+app = Flask(__name__)
 
-  <!-- Favicon (optional) -->
-  <link rel="icon" href="{{ url_for('static', filename='favicon.png') }}" type="image/png">
-</head>
-<body>
-  <div class="container">
-    <header class="header" role="banner">
-      <a class="brand" href="{{ url_for('index') }}">
-        <div class="logo">PK</div>
-        <div>
-          <h1>Pokedex</h1>
-          <p>Explore Pokémon — quick, clean, and searchable</p>
-        </div>
-      </a>
+POKEDEX_PATH = os.path.join(os.path.dirname(__file__), "pokedex.json")
 
-      <nav class="nav" role="navigation" aria-label="Primary">
-        <a class="btn btn--ghost" href="#">About</a>
-        <a class="btn btn--primary" href="#pokedex">Browse</a>
-      </nav>
-    </header>
+def load_pokedex():
+    if os.path.exists(POKEDEX_PATH):
+        with open(POKEDEX_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return pkm.MINIMAL_POKEDEX
 
-    <main>
-      <section class="hero" aria-labelledby="hero-title">
-        <div class="left">
-          <h2 id="hero-title">Find Pokémon by name, id, or type</h2>
-          <p>Use the search and filters below to explore the pokedex.json dataset.</p>
+@app.route("/")
+def index():
+    return render_template("index.html")
 
-          <form id="searchForm" method="get" action="{{ url_for('index') }}" class="controls" role="search">
-            <input
-              class="input"
-              id="searchInput"
-              name="q"
-              type="search"
-              placeholder="Search by name or id..."
-              value="{{ query|default('') }}"
-              aria-label="Search pokedex">
+@app.route("/module1/upload", methods=["POST"])
+def upload():
+    """
+    Accepts:
+    - file: a .txt file with one pokemon name per line (optional)
+    - text: pasted names (one per line) (optional)
+    - manual: extra comma/newline-separated names (optional)
+    - sh: 'on' to append --sh to every gen command (optional)
+    Returns JSON:
+    {
+      "missing_by_gen": { "1": {"command": "...", "count": N, "missing": [...]}, ... },
+      "combined_command": "..."
+    }
+    Note: This response intentionally does NOT include the 'owned' list.
+    """
+    sh_flag = False
+    if request.form.get("sh") in ("on", "true", "1", "yes") or request.values.get("sh") in ("on", "true", "1", "yes"):
+        sh_flag = True
 
-            <select name="gen" id="genSelect" class="input" aria-label="Filter by generation">
-              <option value="">All generations</option>
-              {% for g in gens %}
-                <option value="{{ g }}" {% if selected_gen|default('') == g %}selected{% endif %}>Generation {{ g }}</option>
-              {% endfor %}
-            </select>
+    raw_lines = []
+    # file upload (txt)
+    if "file" in request.files and request.files["file"]:
+        f = request.files["file"]
+        try:
+            content = f.read().decode("utf-8")
+        except Exception:
+            # fallback
+            f.stream.seek(0)
+            content = f.read().decode("latin-1", errors="ignore")
+        raw_lines.extend([ln.strip() for ln in content.splitlines() if ln.strip()])
 
-            <button class="btn btn--primary" type="submit">Search</button>
-            <button type="button" class="btn btn--ghost" id="clearBtn">Clear</button>
-          </form>
-        </div>
+    # pasted text
+    if request.form.get("text"):
+        content = request.form.get("text")
+        raw_lines.extend([ln.strip() for ln in content.splitlines() if ln.strip()])
 
-        <div class="right" aria-hidden="true">
-          <div style="width:120px;height:120px;border-radius:12px;background:linear-gradient(135deg,var(--primary), #8E7BFF);display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:28px">PK</div>
-        </div>
-      </section>
+    # manual extra entries; accept comma or newline separated
+    manual = request.form.get("manual") or request.values.get("manual") or ""
+    if manual:
+        parts = [p.strip() for p in manual.replace(",", "\n").splitlines() if p.strip()]
+        raw_lines.extend(parts)
 
-      <!-- Quick stats -->
-      <div class="row" style="margin-top:12px;align-items:center;justify-content:space-between;">
-        <div class="col">
-          <div class="kv">Showing
-            <strong id="resultCount">{{ pokedex|length if pokedex is defined else 0 }}</strong>
-            Pokémon
-          </div>
-          <div class="kv" style="margin-top:6px;color:var(--muted)">Tip: try searching "fire" or "25"</div>
-        </div>
-      </div>
+    # raw body fallback
+    if not raw_lines:
+        try:
+            raw = request.data.decode("utf-8")
+            if raw.strip():
+                raw_lines.extend([ln.strip() for ln in raw.splitlines() if ln.strip()])
+        except Exception:
+            pass
 
-      <!-- Grid cards (first 6) -->
-      <div class="grid" aria-live="polite" style="margin-top:18px">
-        {% for p in pokedex[:6] %}
-        <article class="card" data-name="{{ p.get('name','')|lower }}" data-types="{{ p.get('type','')|join(' ')|lower }}">
-          <div style="display:flex;gap:12px;align-items:center">
-            <div style="width:56px;height:56px;border-radius:10px;background:#f3f4fb;display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--primary)">
-              {{ p.get('id') }}
-            </div>
-            <div>
-              <div class="title">{{ p.get('name') }}</div>
-              <div class="meta">Type: {{ p.get('type')|join(' / ') }}</div>
-            </div>
-          </div>
-        </article>
-        {% else %}
-        <div class="card">No Pokémon found to preview.</div>
-        {% endfor %}
-      </div>
+    # normalize input names and deduplicate
+    normalized_owned = []
+    seen = set()
+    for raw in raw_lines:
+        norm = pkm.normalize_name(raw)
+        if not norm:
+            continue
+        if norm not in seen:
+            seen.add(norm)
+            normalized_owned.append(norm)
 
-      <!-- Full table -->
-      <section id="pokedex" style="margin-top:28px">
-        <div class="card">
-          <h3 style="margin-top:0">Pokedex</h3>
+    pokedex = load_pokedex()
+    gen_map = {}
+    for entry in pokedex:
+        gen = int(entry.get("gen", 1))
+        name = pkm.normalize_name(entry["name"])
+        gen_map.setdefault(gen, set()).add(name)
 
-          <table class="table" id="pokedexTable" role="table" aria-label="Pokedex table">
-            <thead>
-              <tr>
-                <th style="width:90px">#</th>
-                <th>Name</th>
-                <th>Type</th>
-                <th>Generation</th>
-                <th>Notes</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for p in pokedex %}
-              <tr class="poke-row" data-name="{{ p.get('name','')|lower }}" data-types="{{ p.get('type','')|join(' ')|lower }}">
-                <td><strong>{{ p.get('id') }}</strong></td>
-                <td>{{ p.get('name') }}</td>
-                <td>
-                  {% for t in p.get('type', []) %}
-                    <span class="badge">{{ t }}</span>
-                  {% endfor %}
-                </td>
-                <td>{{ p.get('generation') }}</td>
-                <td class="kv">{{ p.get('notes', '') }}</td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      </section>
+    # Build missing_by_gen but DO NOT return owned list
+    missing_by_gen = {}
+    for g in range(1, 10):
+        all_names = sorted(list(gen_map.get(g, set())))
+        missing = [n for n in all_names if n not in normalized_owned]
+        # prefix each pokemon with --n as requested
+        cmd_parts = []
+        for nm in missing:
+            cmd_parts.append(f"--n {nm}")
+        cmd = " ".join(cmd_parts)
+        if sh_flag and cmd.strip():
+            cmd = f"{cmd} --sh"
+        missing_by_gen[str(g)] = {
+            "missing": missing,
+            "count": len(missing),
+            "command": cmd
+        }
 
-      <footer class="footer">
-        <div>Made with ❤️ • Pokedex demo</div>
-      </footer>
-    </main>
-  </div>
+    combined_cmds = []
+    for g in range(1, 10):
+        cmd = missing_by_gen[str(g)]["command"]
+        if cmd.strip():
+            combined_cmds.append(cmd)
+    combined_command = " && ".join(combined_cmds)
 
-  <!-- Client-side filtering for instant UX -->
-  <script>
-    (function(){
-      const searchInput = document.getElementById('searchInput');
-      const clearBtn = document.getElementById('clearBtn');
-      const rows = Array.from(document.querySelectorAll('.poke-row'));
-      const resultCount = document.getElementById('resultCount');
+    return jsonify({
+        "missing_by_gen": missing_by_gen,
+        "combined_command": combined_command
+    })
 
-      function normalize(s){ return (s||'').toString().toLowerCase(); }
-
-      function filterRows(term) {
-        const q = normalize(term);
-        let visible = 0;
-        rows.forEach(r=>{
-          const name = r.dataset.name || '';
-          const types = r.dataset.types || '';
-          const id = (r.querySelector('td strong')||{}).textContent || '';
-          const hay = [name, types, id].join(' ');
-          if (!q || hay.indexOf(q) !== -1) {
-            r.style.display = '';
-            visible++;
-          } else {
-            r.style.display = 'none';
-          }
-        });
-        if (resultCount) resultCount.textContent = visible;
-      }
-
-      searchInput && searchInput.addEventListener('input', (e)=> filterRows(e.target.value));
-      clearBtn && clearBtn.addEventListener('click', ()=>{
-        if (searchInput) searchInput.value = '';
-        filterRows('');
-        try {
-          const url = new URL(window.location);
-          url.searchParams.delete('q');
-          window.history.replaceState({}, '', url);
-        } catch(e){}
-      });
-
-      document.addEventListener('DOMContentLoaded', ()=>{
-        filterRows(searchInput ? searchInput.value : '');
-      });
-    })();
-  </script>
-</body>
-</html>
+if __name__ == "__main__":
+    app.run(debug=True, host="0.0.0.0", port=5000)
