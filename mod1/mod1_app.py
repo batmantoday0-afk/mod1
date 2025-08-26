@@ -1,121 +1,96 @@
-from flask import Flask, request, jsonify, render_template
+# mod1/mod1_app.py
 import os
 import json
-from mod1.mod1_modules import pokemon as pkm
+from flask import Flask, request, render_template, jsonify
 
-app = Flask(__name__)
+# Create Flask app; set static/template folders relative to this package
+app = Flask(__name__, static_folder="static", template_folder="templates")
 
 POKEDEX_PATH = os.path.join(os.path.dirname(__file__), "pokedex.json")
 
 def load_pokedex():
-    if os.path.exists(POKEDEX_PATH):
-        with open(POKEDEX_PATH, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return pkm.MINIMAL_POKEDEX
+    """
+    Load pokedex.json from the mod1 folder.
+    Returns a list of dicts (empty list on error).
+    """
+    try:
+        if os.path.exists(POKEDEX_PATH):
+            with open(POKEDEX_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                # Expect data to be a list; if dict, try to extract 'pokemon' or similar
+                if isinstance(data, dict):
+                    # try common keys
+                    for key in ("pokemon", "results", "data"):
+                        if key in data and isinstance(data[key], list):
+                            return data[key]
+                    # fallback: if dict of id->obj, return values
+                    return list(data.values())
+                if isinstance(data, list):
+                    return data
+        # fallback: empty list
+        return []
+    except Exception:
+        # Avoid crashing on malformed JSON; return empty list instead
+        return []
 
-@app.route("/")
+@app.route("/", methods=["GET"])
 def index():
-    return render_template("index.html")
+    pokedex = load_pokedex() or []
+    q = (request.args.get("q") or "").strip().lower()
+    gen = (request.args.get("gen") or "").strip()
 
-@app.route("/module1/upload", methods=["POST"])
-def upload():
-    """
-    Accepts:
-    - file: a .txt file with one pokemon name per line (optional)
-    - text: pasted names (one per line) (optional)
-    - manual: extra comma/newline-separated names (optional)
-    - sh: 'on' to append --sh to every gen command (optional)
-    Returns JSON:
-    {
-      "missing_by_gen": { "1": {"command": "...", "count": N, "missing": [...]}, ... },
-      "combined_command": "..."
-    }
-    Note: This response intentionally does NOT include the 'owned' list.
-    """
-    sh_flag = False
-    if request.form.get("sh") in ("on", "true", "1", "yes") or request.values.get("sh") in ("on", "true", "1", "yes"):
-        sh_flag = True
-
-    raw_lines = []
-    # file upload (txt)
-    if "file" in request.files and request.files["file"]:
-        f = request.files["file"]
+    def matches_query(p):
+        if not q:
+            return True
+        # id
         try:
-            content = f.read().decode("utf-8")
-        except Exception:
-            # fallback
-            f.stream.seek(0)
-            content = f.read().decode("latin-1", errors="ignore")
-        raw_lines.extend([ln.strip() for ln in content.splitlines() if ln.strip()])
-
-    # pasted text
-    if request.form.get("text"):
-        content = request.form.get("text")
-        raw_lines.extend([ln.strip() for ln in content.splitlines() if ln.strip()])
-
-    # manual extra entries; accept comma or newline separated
-    manual = request.form.get("manual") or request.values.get("manual") or ""
-    if manual:
-        parts = [p.strip() for p in manual.replace(",", "\n").splitlines() if p.strip()]
-        raw_lines.extend(parts)
-
-    # raw body fallback
-    if not raw_lines:
-        try:
-            raw = request.data.decode("utf-8")
-            if raw.strip():
-                raw_lines.extend([ln.strip() for ln in raw.splitlines() if ln.strip()])
+            pid = str(p.get("id", "")).lower()
+            if q == pid:
+                return True
         except Exception:
             pass
+        # name
+        if q in str(p.get("name", "")).lower():
+            return True
+        # types (list)
+        types_text = " ".join(p.get("type", []) or []).lower()
+        if q in types_text:
+            return True
+        # notes/other fields
+        if q in str(p.get("notes", "")).lower():
+            return True
+        return False
 
-    # normalize input names and deduplicate
-    normalized_owned = []
-    seen = set()
-    for raw in raw_lines:
-        norm = pkm.normalize_name(raw)
-        if not norm:
-            continue
-        if norm not in seen:
-            seen.add(norm)
-            normalized_owned.append(norm)
+    # first filter by query
+    filtered = [p for p in pokedex if matches_query(p)]
+    # then by generation if provided
+    if gen:
+        filtered = [p for p in filtered if str(p.get("generation", "")).strip() == gen]
 
+    # build unique gens list from the entire pokedex (not just filtered)
+    gens_set = { str(p.get("generation", "")).strip() for p in pokedex if p.get("generation") is not None }
+    gens = sorted([g for g in gens_set if g != ""], key=lambda x: int(x) if x.isdigit() else x)
+
+    # Render template
+    return render_template(
+        "index.html",
+        pokedex=filtered,
+        query=q,
+        selected_gen=gen,
+        gens=gens
+    )
+
+@app.route("/api/pokedex", methods=["GET"])
+def api_pokedex():
+    """Return the full pokedex JSON (or limited view)."""
     pokedex = load_pokedex()
-    gen_map = {}
-    for entry in pokedex:
-        gen = int(entry.get("gen", 1))
-        name = pkm.normalize_name(entry["name"])
-        gen_map.setdefault(gen, set()).add(name)
+    return jsonify({"count": len(pokedex), "results": pokedex})
 
-    # Build missing_by_gen but DO NOT return owned list
-    missing_by_gen = {}
-    for g in range(1, 10):
-        all_names = sorted(list(gen_map.get(g, set())))
-        missing = [n for n in all_names if n not in normalized_owned]
-        # prefix each pokemon with --n as requested
-        cmd_parts = []
-        for nm in missing:
-            cmd_parts.append(f"--n {nm}")
-        cmd = " ".join(cmd_parts)
-        if sh_flag and cmd.strip():
-            cmd = f"{cmd} --sh"
-        missing_by_gen[str(g)] = {
-            "missing": missing,
-            "count": len(missing),
-            "command": cmd
-        }
-
-    combined_cmds = []
-    for g in range(1, 10):
-        cmd = missing_by_gen[str(g)]["command"]
-        if cmd.strip():
-            combined_cmds.append(cmd)
-    combined_command = " && ".join(combined_cmds)
-
-    return jsonify({
-        "missing_by_gen": missing_by_gen,
-        "combined_command": combined_command
-    })
+# Basic health-check
+@app.route("/api/health", methods=["GET"])
+def health():
+    return jsonify({"status": "ok"})
 
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=5000)
-
+    # Local dev convenience
+    app.run(debug=True, host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
