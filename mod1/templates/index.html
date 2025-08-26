@@ -1,126 +1,198 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Pokémon Command Generator</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
-        }
-        h2 {
-            margin-top: 30px;
-        }
-        .gen-block {
-            border: 1px solid #ccc;
-            margin: 15px 0;
-            padding: 10px;
-            border-radius: 6px;
-        }
-        textarea {
-            width: 100%;
-            margin-top: 5px;
-        }
-        button {
-            margin-top: 5px;
-        }
-        .missing-info {
-            margin-top: 8px;
-            font-size: 0.9em;
-            color: #333;
-        }
-    </style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Pokedex — Explore Pokémon</title>
+
+  <!-- Optional Google font (uncomment if you want) -->
+  <!-- <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet"> -->
+
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/site.css') }}">
+
+  <!-- Favicon (optional) -->
+  <link rel="icon" href="{{ url_for('static', filename='favicon.png') }}" type="image/png">
 </head>
 <body>
-    <h1>Pokémon Command Generator</h1>
-    <form id="upload-form" method="post" enctype="multipart/form-data">
-        <input type="file" name="file" accept=".txt" required>
-        <button type="submit">Upload</button>
-    </form>
+  <div class="container">
+    <header class="header" role="banner">
+      <a class="brand" href="{{ url_for('index') if 'index' in globals() else '/' }}">
+        <div class="logo">PK</div>
+        <div>
+          <h1>Pokedex</h1>
+          <p>Explore Pokémon — quick, clean, and searchable</p>
+        </div>
+      </a>
 
-    <h2>Results</h2>
-    <div id="results"></div>
+      <nav class="nav" role="navigation" aria-label="Primary">
+        <a class="btn btn--ghost" href="#">About</a>
+        <a class="btn btn--primary" href="#pokedex">Browse</a>
+      </nav>
+    </header>
 
-    <script>
-    document.getElementById("upload-form").addEventListener("submit", async (e) => {
-        e.preventDefault();
-        const formData = new FormData(e.target);
-        const resp = await fetch("/module1/upload", { method: "POST", body: formData });
-        if (!resp.ok) {
-            alert("Error: " + resp.status);
-            return;
-        }
-        const data = await resp.json();
-        renderResults(data);
-    });
+    <main>
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="left">
+          <h2 id="hero-title">Find Pokémon by name, id, or type</h2>
+          <p>Use the search and filters below to explore the pokedex.json dataset.</p>
 
-    function renderResults(data) {
-        const container = document.getElementById("results");
-        container.innerHTML = "";
+          <form id="searchForm" method="get" action="{{ url_for('index') if 'index' in globals() else '/' }}" class="controls" role="search">
+            <input
+              class="input"
+              id="searchInput"
+              name="q"
+              type="search"
+              placeholder="Search by name or id..."
+              value="{{ query|default('') }}"
+              aria-label="Search pokedex">
 
-        // Gen-wise blocks only
-        const gens = Object.keys(data.missing_by_gen).sort((a, b) => parseInt(a) - parseInt(b));
-        gens.forEach(gen => {
-            const info = data.missing_by_gen[gen];
-            if (!info.command) return;
+            <select name="gen" id="genSelect" class="input" aria-label="Filter by generation">
+              <option value="">All generations</option>
+              {% set gens = [] %}
+              {% for p in pokedex %}
+                {% if p.get('generation') not in gens %}
+                  {% do gens.append(p.get('generation')) %}
+                {% endif %}
+              {% endfor %}
+              {% for g in gens|sort %}
+                <option value="{{ g }}" {% if selected_gen|default('') == g %}selected{% endif %}>Generation {{ g }}</option>
+              {% endfor %}
+            </select>
 
-            const wrapper = document.createElement("div");
-            wrapper.className = "gen-block";
+            <button class="btn btn--primary" type="submit">Search</button>
+            <button type="button" class="btn btn--ghost" id="clearBtn">Clear</button>
+          </form>
+        </div>
 
-            const title = document.createElement("h3");
-            title.textContent = "Gen " + gen + " Commands";
-            wrapper.appendChild(title);
+        <div class="right" aria-hidden="true">
+          <div style="width:120px;height:120px;border-radius:12px;background:linear-gradient(135deg,var(--primary), #8E7BFF);display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:28px">PK</div>
+        </div>
+      </section>
 
-            const cmdBox = document.createElement("textarea");
-            cmdBox.value = info.command;
-            cmdBox.rows = 3;
-            cmdBox.id = "cmd-gen-" + gen;
-            wrapper.appendChild(cmdBox);
+      <!-- Quick stats -->
+      <div class="row" style="margin-top:12px;align-items:center;justify-content:space-between;">
+        <div class="col">
+          <div class="kv">Showing
+            <strong id="resultCount">{{ pokedex|length if pokedex is defined else 0 }}</strong>
+            Pokémon
+          </div>
+          <div class="kv" style="margin-top:6px;color:var(--muted)">Tip: try searching "fire" or "25"</div>
+        </div>
+      </div>
 
-            const shinyToggle = document.createElement("input");
-            shinyToggle.type = "checkbox";
-            shinyToggle.id = "shiny-gen-" + gen;
+      <!-- Grid cards (first 6) -->
+      <div class="grid" aria-live="polite" style="margin-top:18px">
+        {% for p in pokedex[:6] %}
+        <article class="card" data-name="{{ p.get('name','')|lower }}" data-types="{{ p.get('type','')|join(' ')|lower }}">
+          <div style="display:flex;gap:12px;align-items:center">
+            <div style="width:56px;height:56px;border-radius:10px;background:#f3f4fb;display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--primary)">
+              {{ p.get('id') }}
+            </div>
+            <div>
+              <div class="title">{{ p.get('name') }}</div>
+              <div class="meta">Type: {{ p.get('type')|join(' / ') }}</div>
+            </div>
+          </div>
+        </article>
+        {% else %}
+        <div class="card">No Pokémon found to preview.</div>
+        {% endfor %}
+      </div>
 
-            const shinyLabel = document.createElement("label");
-            shinyLabel.textContent = " Add --sh";
-            shinyLabel.htmlFor = shinyToggle.id;
+      <!-- Full table -->
+      <section id="pokedex" style="margin-top:28px">
+        <div class="card">
+          <h3 style="margin-top:0">Pokedex</h3>
 
-            shinyToggle.addEventListener("change", () => {
-                let baseCmd = info.command;
-                if (shinyToggle.checked) {
-                    cmdBox.value = baseCmd + " --sh";
-                } else {
-                    cmdBox.value = baseCmd;
-                }
-            });
+          <table class="table" id="pokedexTable" role="table" aria-label="Pokedex table">
+            <thead>
+              <tr>
+                <th style="width:90px">#</th>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Generation</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for p in pokedex %}
+              <tr class="poke-row" data-name="{{ p.get('name','')|lower }}" data-types="{{ p.get('type','')|join(' ')|lower }}">
+                <td><strong>{{ p.get('id') }}</strong></td>
+                <td>{{ p.get('name') }}</td>
+                <td>
+                  {% for t in p.get('type', []) %}
+                    <span class="badge">{{ t }}</span>
+                  {% endfor %}
+                </td>
+                <td>{{ p.get('generation') }}</td>
+                <td class="kv">{{ p.get('notes', '') }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
 
-            wrapper.appendChild(document.createElement("br"));
-            wrapper.appendChild(shinyToggle);
-            wrapper.appendChild(shinyLabel);
+      <footer class="footer">
+        <div>Made with ❤️ • Pokedex demo</div>
+      </footer>
+    </main>
+  </div>
 
-            const copyBtn = document.createElement("button");
-            copyBtn.textContent = "Copy Command";
-            copyBtn.style.marginLeft = "10px";
+  <!-- Client-side filtering for instant UX -->
+  <script>
+    (function(){
+      const searchInput = document.getElementById('searchInput');
+      const clearBtn = document.getElementById('clearBtn');
+      const rows = Array.from(document.querySelectorAll('.poke-row'));
+      const resultCount = document.getElementById('resultCount');
 
-            copyBtn.addEventListener("click", () => {
-                cmdBox.select();
-                cmdBox.setSelectionRange(0, 99999);
-                document.execCommand("copy");
-                copyBtn.textContent = "Copied!";
-                setTimeout(() => { copyBtn.textContent = "Copy Command"; }, 1500);
-            });
+      function normalize(s){ return (s||'').toString().toLowerCase(); }
 
-            wrapper.appendChild(copyBtn);
-
-            // Show only missing count
-            const missingInfo = document.createElement("div");
-            missingInfo.className = "missing-info";
-            missingInfo.innerHTML = `<strong>Missing Count:</strong> ${info.count}`;
-            wrapper.appendChild(missingInfo);
-
-            container.appendChild(wrapper);
+      function filterRows(term) {
+        const q = normalize(term);
+        let visible = 0;
+        rows.forEach(r=>{
+          const name = r.dataset.name || '';
+          const types = r.dataset.types || '';
+          const id = (r.querySelector('td strong')||{}).textContent || '';
+          const hay = [name, types, id].join(' ');
+          if (!q || hay.indexOf(q) !== -1) {
+            r.style.display = '';
+            visible++;
+          } else {
+            r.style.display = 'none';
+          }
         });
-    }
-    </script>
+        if (resultCount) resultCount.textContent = visible;
+      }
+
+      // Instant filter as user types
+      searchInput && searchInput.addEventListener('input', (e)=> filterRows(e.target.value));
+
+      // Clear button resets search and form (but keep generation select)
+      clearBtn && clearBtn.addEventListener('click', ()=>{
+        if (searchInput) searchInput.value = '';
+        filterRows('');
+        // If the page was loaded with a server-side query param, clearing won't remove it on server.
+        // The clear button only resets client-side view. To remove server-side filtering, navigate to base URL.
+        if (window.location.search) {
+          // If only 'q' param exists, reload without it
+          try {
+            const url = new URL(window.location);
+            url.searchParams.delete('q');
+            // leave other params (e.g., gen) intact
+            window.history.replaceState({}, '', url);
+          } catch(e){}
+        }
+      });
+
+      // Initialize filter with any server-side query value shown in input
+      document.addEventListener('DOMContentLoaded', ()=>{
+        filterRows(searchInput ? searchInput.value : '');
+      });
+    })();
+  </script>
 </body>
 </html>
