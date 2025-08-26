@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Pokémon Command Generator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        h2 {
+            margin-top: 30px;
+        }
+        .gen-block {
+            border: 1px solid #ccc;
+            margin: 15px 0;
+            padding: 10px;
+            border-radius: 6px;
+        }
+        textarea {
+            width: 100%;
+            margin-top: 5px;
+        }
+        button {
+            margin-top: 5px;
+        }
+        .missing-info {
+            margin-top: 8px;
+            font-size: 0.9em;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <h1>Pokémon Command Generator</h1>
+    <form id="upload-form" method="post" enctype="multipart/form-data">
+        <input type="file" name="file" accept=".txt" required>
+        <button type="submit">Upload</button>
+    </form>
+
+    <h2>Results</h2>
+    <div id="results"></div>
+
+    <script>
+    document.getElementById("upload-form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+        const resp = await fetch("/module1/upload", { method: "POST", body: formData });
+        if (!resp.ok) {
+            alert("Error: " + resp.status);
+            return;
+        }
+        const data = await resp.json();
+        renderResults(data);
+    });
+
+    function renderResults(data) {
+        const container = document.getElementById("results");
+        container.innerHTML = "";
+
+        // Gen-wise blocks only
+        const gens = Object.keys(data.missing_by_gen).sort((a, b) => parseInt(a) - parseInt(b));
+        gens.forEach(gen => {
+            const info = data.missing_by_gen[gen];
+            if (!info.command) return;
+
+            const wrapper = document.createElement("div");
+            wrapper.className = "gen-block";
+
+            const title = document.createElement("h3");
+            title.textContent = "Gen " + gen + " Commands";
+            wrapper.appendChild(title);
+
+            const cmdBox = document.createElement("textarea");
+            cmdBox.value = info.command;
+            cmdBox.rows = 3;
+            cmdBox.id = "cmd-gen-" + gen;
+            wrapper.appendChild(cmdBox);
+
+            const shinyToggle = document.createElement("input");
+            shinyToggle.type = "checkbox";
+            shinyToggle.id = "shiny-gen-" + gen;
+
+            const shinyLabel = document.createElement("label");
+            shinyLabel.textContent = " Add --sh";
+            shinyLabel.htmlFor = shinyToggle.id;
+
+            shinyToggle.addEventListener("change", () => {
+                let baseCmd = info.command;
+                if (shinyToggle.checked) {
+                    cmdBox.value = baseCmd + " --sh";
+                } else {
+                    cmdBox.value = baseCmd;
+                }
+            });
+
+            wrapper.appendChild(document.createElement("br"));
+            wrapper.appendChild(shinyToggle);
+            wrapper.appendChild(shinyLabel);
+
+            const copyBtn = document.createElement("button");
+            copyBtn.textContent = "Copy Command";
+            copyBtn.style.marginLeft = "10px";
+
+            copyBtn.addEventListener("click", () => {
+                cmdBox.select();
+                cmdBox.setSelectionRange(0, 99999);
+                document.execCommand("copy");
+                copyBtn.textContent = "Copied!";
+                setTimeout(() => { copyBtn.textContent = "Copy Command"; }, 1500);
+            });
+
+            wrapper.appendChild(copyBtn);
+
+            // Show only missing count
+            const missingInfo = document.createElement("div");
+            missingInfo.className = "missing-info";
+            missingInfo.innerHTML = `<strong>Missing Count:</strong> ${info.count}`;
+            wrapper.appendChild(missingInfo);
+
+            container.appendChild(wrapper);
+        });
+    }
+    </script>
+</body>
+</html>
