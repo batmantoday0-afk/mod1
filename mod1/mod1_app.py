@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify, render_template
 import os
 import json
-from mod1_modules import pokemon as pkm
+from mod1.mod1_modules import pokemon as pkm
 
 app = Flask(__name__)
 
@@ -118,3 +118,4 @@ def upload():
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=5000)
+
