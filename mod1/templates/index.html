@@ -5,9 +5,6 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Pokedex — Explore Pokémon</title>
 
-  <!-- Optional Google font (uncomment if you want) -->
-  <!-- <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet"> -->
-
   <!-- Stylesheet -->
   <link rel="stylesheet" href="{{ url_for('static', filename='css/site.css') }}">
 
@@ -17,7 +14,7 @@
 <body>
   <div class="container">
     <header class="header" role="banner">
-      <a class="brand" href="{{ url_for('index') if 'index' in globals() else '/' }}">
+      <a class="brand" href="{{ url_for('index') }}">
         <div class="logo">PK</div>
         <div>
           <h1>Pokedex</h1>
@@ -37,7 +34,7 @@
           <h2 id="hero-title">Find Pokémon by name, id, or type</h2>
           <p>Use the search and filters below to explore the pokedex.json dataset.</p>
 
-          <form id="searchForm" method="get" action="{{ url_for('index') if 'index' in globals() else '/' }}" class="controls" role="search">
+          <form id="searchForm" method="get" action="{{ url_for('index') }}" class="controls" role="search">
             <input
               class="input"
               id="searchInput"
@@ -49,13 +46,7 @@
 
             <select name="gen" id="genSelect" class="input" aria-label="Filter by generation">
               <option value="">All generations</option>
-              {% set gens = [] %}
-              {% for p in pokedex %}
-                {% if p.get('generation') not in gens %}
-                  {% do gens.append(p.get('generation')) %}
-                {% endif %}
-              {% endfor %}
-              {% for g in gens|sort %}
+              {% for g in gens %}
                 <option value="{{ g }}" {% if selected_gen|default('') == g %}selected{% endif %}>Generation {{ g }}</option>
               {% endfor %}
             </select>
@@ -168,27 +159,17 @@
         if (resultCount) resultCount.textContent = visible;
       }
 
-      // Instant filter as user types
       searchInput && searchInput.addEventListener('input', (e)=> filterRows(e.target.value));
-
-      // Clear button resets search and form (but keep generation select)
       clearBtn && clearBtn.addEventListener('click', ()=>{
         if (searchInput) searchInput.value = '';
         filterRows('');
-        // If the page was loaded with a server-side query param, clearing won't remove it on server.
-        // The clear button only resets client-side view. To remove server-side filtering, navigate to base URL.
-        if (window.location.search) {
-          // If only 'q' param exists, reload without it
-          try {
-            const url = new URL(window.location);
-            url.searchParams.delete('q');
-            // leave other params (e.g., gen) intact
-            window.history.replaceState({}, '', url);
-          } catch(e){}
-        }
+        try {
+          const url = new URL(window.location);
+          url.searchParams.delete('q');
+          window.history.replaceState({}, '', url);
+        } catch(e){}
       });
 
-      // Initialize filter with any server-side query value shown in input
       document.addEventListener('DOMContentLoaded', ()=>{
         filterRows(searchInput ? searchInput.value : '');
       });
