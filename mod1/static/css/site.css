@@ -1,0 +1,185 @@
+/* mod1/static/css/site.css
+   Modern, lightweight site styles for your Flask templates.
+*/
+
+:root{
+  --bg: #F7F8FC;
+  --surface: #FFFFFF;
+  --text: #1E293B;
+  --muted: #64748B;
+  --primary: #6C5CE7;
+  --accent: #00B894;
+  --glass: rgba(255,255,255,0.6);
+  --radius: 12px;
+  --shadow: 0 6px 18px rgba(30,41,59,0.08);
+  --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", "Courier New", monospace;
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  color:var(--text);
+  background:linear-gradient(180deg, var(--bg) 0%, #ffffff 100%);
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+  line-height:1.45;
+}
+
+/* Layout */
+.container{
+  width: min(1100px, 92%);
+  margin: 28px auto;
+}
+
+/* Header */
+.header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+}
+.brand{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--text);
+}
+.logo{
+  width:48px;
+  height:48px;
+  display:inline-grid;
+  place-items:center;
+  border-radius:10px;
+  background:linear-gradient(135deg,var(--primary), #8E7BFF);
+  color:white;
+  font-weight:700;
+  box-shadow:var(--shadow);
+}
+.brand h1{
+  font-size:1.05rem;
+  margin:0;
+  letter-spacing: -0.02em;
+}
+.brand p{margin:0;font-size:0.85rem;color:var(--muted)}
+
+/* Nav */
+.nav{
+  display:flex;
+  gap:12px;
+  align-items:center;
+}
+.btn{
+  border:0;
+  padding:8px 14px;
+  border-radius:999px;
+  font-weight:600;
+  cursor:pointer;
+  transition:all .18s ease;
+}
+.btn--primary{
+  background:linear-gradient(90deg,var(--primary), #8367FF);
+  color:white;
+  box-shadow:0 6px 16px rgba(108,92,231,0.16);
+}
+.btn--ghost{
+  background:transparent;
+  color:var(--text);
+}
+
+/* Hero */
+.hero{
+  margin:20px 0 28px;
+  padding:20px;
+  background:linear-gradient(180deg, rgba(108,92,231,0.06), rgba(0,0,0,0));
+  border-radius:var(--radius);
+  display:flex;
+  gap:20px;
+  align-items:center;
+  justify-content:space-between;
+}
+.hero .left{
+  flex:1;
+}
+.hero h2{margin:0 0 8px;font-size:1.6rem}
+.hero p{margin:0;color:var(--muted)}
+
+/* Search / controls */
+.controls{
+  display:flex;
+  gap:10px;
+  align-items:center;
+  margin-top:12px;
+}
+.input{
+  padding:10px 12px;
+  border-radius:10px;
+  border:1px solid rgba(30,41,59,0.06);
+  background:var(--surface);
+  min-width:220px;
+  outline:none;
+}
+.input:focus{box-shadow:0 6px 18px rgba(108,92,231,0.08);border-color:var(--primary)}
+
+/* Card grid */
+.grid{
+  display:grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px,1fr));
+  gap:16px;
+  margin-top:20px;
+}
+.card{
+  background:var(--surface);
+  border-radius:12px;
+  padding:14px;
+  box-shadow:var(--shadow);
+  transition:transform .12s ease, box-shadow .12s ease;
+}
+.card:hover{transform:translateY(-6px); box-shadow:0 18px 36px rgba(30,41,59,0.08)}
+.card .title{font-weight:700;margin-bottom:6px}
+.card .meta{font-size:0.85rem;color:var(--muted)}
+
+/* Table style (pokedex) */
+.table{
+  width:100%;
+  border-collapse:collapse;
+  margin-top:12px;
+  background:transparent;
+}
+.table thead tr{background:linear-gradient(90deg,#f5f6fb, #ffffff);border-radius:8px}
+.table th, .table td{
+  text-align:left;
+  padding:12px 10px;
+  border-bottom:1px solid rgba(30,41,59,0.04);
+}
+.table tbody tr:hover{background:rgba(108,92,231,0.03)}
+.badge{
+  display:inline-block;
+  padding:6px 8px;
+  border-radius:999px;
+  background:#F0F7F6;
+  color:var(--text);
+  font-weight:600;
+  font-size:0.85rem;
+}
+
+/* Footer */
+.footer{
+  margin:36px 0 80px;
+  text-align:center;
+  color:var(--muted);
+  font-size:0.9rem;
+}
+
+/* Utilities */
+.row{display:flex;gap:12px;align-items:center}
+.col{display:flex;flex-direction:column;gap:8px}
+.kv{font-size:0.9rem;color:var(--muted)}
+
+/* Responsive tweaks */
+@media (max-width:720px){
+  .hero{flex-direction:column;align-items:flex-start}
+  .brand h1{font-size:1rem}
+}
